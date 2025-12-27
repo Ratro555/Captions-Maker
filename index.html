@@ -148,6 +148,10 @@
                     <button onclick="setPreset('pop')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700 active-preset ring-1 ring-violet-500">
                         ⚡ <b>Pop</b> <span class="opacity-50 text-[9px] block">Плавное увеличение</span>
                     </button>
+                    <!-- НОВЫЙ ПРЕСЕТ ELASTIC -->
+                    <button onclick="setPreset('elastic')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
+                        🌀 <b>Elastic</b> <span class="opacity-50 text-[9px] block">Пружинистый эффект</span>
+                    </button>
                     <button onclick="setPreset('box')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
                         🟦 <b>Box</b> <span class="opacity-50 text-[9px] block">Скользящая плашка</span>
                     </button>
@@ -454,6 +458,10 @@
                 setVal('strokeWidth', 8);
                 setVal('strokeColor', '#000000');
                 setVal('wordSpacing', 25); 
+            } else if (presetName === 'elastic') { // ELASTIC PRESET SETTINGS
+                setVal('activeColor', '#fbbf24'); // Amber-400
+                setVal('strokeWidth', 8);
+                setVal('wordSpacing', 20);
             } else if (presetName === 'box') {
                 setVal('activeColor', '#ffffff');
                 setVal('highlightColor', '#8b5cf6'); 
@@ -684,6 +692,24 @@
                         if (dist < 0.5) textColor = activeColor;
                     }
                 } 
+                else if (preset === 'elastic') {
+                    // "Expensive" Physics Effect
+                    if (dist < 2.0) {
+                        // Spring wobble
+                        const decay = Math.max(0, 1.0 - (dist / 2.0)); 
+                        const wobble = Math.cos(dist * 6.0) * decay * decay;
+                        
+                        scale = 1.0 + (0.5 * wobble);
+                        
+                        if (dist < 0.6) textColor = activeColor;
+                        
+                        // Chaotic Rotation
+                        const rotStrength = 0.1; // radians
+                        const dir = (w.index % 2 === 0) ? 1 : -1;
+                        const angle = dir * Math.sin(dist * 3.0) * decay * rotStrength;
+                        ctx.rotate(angle);
+                    }
+                }
                 else if (preset === 'box') {
                     if (isActive) textColor = activeColor;
                 }
