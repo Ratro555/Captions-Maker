@@ -62,6 +62,9 @@
         <div class="flex gap-3 items-center">
             
             <div class="flex gap-1 mr-2 border-r border-gray-700 pr-3">
+                <button id="bgToggleBtn" onclick="toggleBg()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 p-2 rounded text-xs transition border border-gray-700" title="Зеленый фон (Хромакей)">
+                    <i class="fas fa-fill-drip"></i>
+                </button>
                 <button onclick="exportSettings()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 p-2 rounded text-xs transition border border-gray-700" title="Сохранить настройки (JSON)">
                     <i class="fas fa-save"></i>
                 </button>
@@ -76,9 +79,14 @@
                 <input type="file" id="audioInput" accept="audio/*" class="hidden">
             </label>
 
-            <button id="recordBtn" class="bg-violet-600 hover:bg-violet-700 px-6 py-2 rounded text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50 disabled:grayscale" disabled>
-                <i class="fas fa-video"></i> <span>СОЗДАТЬ GIF</span>
-            </button>
+            <div class="flex gap-2">
+                <button id="recordBtn" class="bg-violet-600 hover:bg-violet-700 px-4 py-2 rounded text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50 disabled:grayscale" disabled>
+                    <i class="fas fa-video"></i> <span>GIF</span>
+                </button>
+                <button id="recordVideoBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-xs font-bold shadow-lg transition flex items-center gap-2 disabled:opacity-50 disabled:grayscale" disabled title="Записать как MP4 (WebM)">
+                    <i class="fas fa-film"></i> <span>MP4</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -274,6 +282,7 @@
         
         const playBtn = document.getElementById('playBtn');
         const recordBtn = document.getElementById('recordBtn');
+        const recordVideoBtn = document.getElementById('recordVideoBtn'); // NEW
         const audioInput = document.getElementById('audioInput');
         const textInput = document.getElementById('textInput');
         const micBtn = document.getElementById('micBtn');
@@ -285,6 +294,21 @@
         const placeholder = document.getElementById('placeholder');
         const fpsInput = document.getElementById('fpsInput');
         const fpsDisplay = document.getElementById('fpsDisplay');
+
+        // --- BACKGROUND STATE ---
+        let isGreenBg = false;
+        function toggleBg() {
+            isGreenBg = !isGreenBg;
+            const btn = document.getElementById('bgToggleBtn');
+            if (isGreenBg) {
+                btn.classList.replace('text-gray-300', 'text-green-500');
+                btn.classList.add('border-green-500');
+            } else {
+                btn.classList.replace('text-green-500', 'text-gray-300');
+                btn.classList.remove('border-green-500');
+            }
+            if(!isPlaying) draw();
+        }
 
         // --- WEB AUDIO API SETUP ---
         let audioCtx;
@@ -452,6 +476,7 @@
         let segments = []; 
         let isPlaying = false;
         let isRecording = false;
+        let isRecordingVideo = false; // NEW
         let isDraggingSeek = false;
         let animationId;
         let smoothBox = { x: 0, y: 0, w: 0, h: 0, initialized: false };
@@ -607,10 +632,16 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // --- PASS: BACKGROUND ---
+            if (isGreenBg) {
+                ctx.fillStyle = "#00FF00";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
 
             if (segments.length === 0) {
                 if (!audio.src) return;
-                ctx.fillStyle = "rgba(255,255,255,0.2)";
+                ctx.fillStyle = isGreenBg ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.2)";
                 ctx.font = "bold 30px 'Roboto'";
                 ctx.textAlign = "center";
                 ctx.fillText("Введите текст: 1:(Текст)", pos.x, pos.y);
@@ -658,12 +689,9 @@
                 if (targetW) {
                     const offY = parseInt(getVal('boxOffsetY', 0));
                     
-                    // Базовые параметры из слайдеров (Максимальные отступы)
                     const userMaxPadX = parseInt(getVal('boxPadX', 20));
                     const userMaxPadY = parseInt(getVal('boxPadY', 10));
 
-                    // Цель сглаживания теперь - это ТОЛЬКО размеры текста
-                    // Мы не включаем отступы в smoothBox, мы добавляем их при отрисовке
                     const boxTargetW = targetW.width;
                     const boxTargetH = fontSize; 
                     const boxTargetX = targetW.x; 
@@ -683,24 +711,18 @@
                         smoothBox.h += (boxTargetH - smoothBox.h) * speed;
                     }
 
-                    // --- AUDIO REACTIVE PADDING ---
-                    // Амплитуда влияет только на заполнение отступов (padding)
-                    // MinPad - чтобы текст не прилипал к краям даже в тишине
                     const minPad = 4; 
                     let amp = 0;
                     if (isPlaying && analyser) {
-                         // Усиливаем амплитуду, чтобы эффект был виден (0.0 - 1.0)
                          amp = Math.min(1.0, getAudioAmplitude() * 2.5); 
                     }
                     
-                    // Плавная интерполяция от minPad до UserMaxPad
                     const currentPadX = minPad + (userMaxPadX - minPad) * amp;
                     const currentPadY = minPad + (userMaxPadY - minPad) * amp;
 
                     ctx.save();
                     ctx.translate(Math.round(smoothBox.x), Math.round(smoothBox.y));
                     
-                    // Отрисовка с учетом динамических отступов
                     ctx.fillStyle = getVal('highlightColor', '#8b5cf6');
                     ctx.beginPath();
                     
@@ -724,7 +746,7 @@
             const fixBlack = document.getElementById('fixBlackStroke').checked;
             let strokeC = getVal('strokeColor', '#000000');
             if (fixBlack && strokeC === '#000000') {
-                strokeC = '#010101'; // The "Fix" for GIF transparency
+                strokeC = '#010101'; 
             }
 
             // --- PASS 1: STROKE (Background Layer) ---
@@ -764,9 +786,7 @@
                     ctx.lineJoin = 'round';
                     ctx.miterLimit = 2;
 
-                    // Draw clean stroke
                     ctx.strokeText(w.text, 0, 0);
-                    
                     ctx.restore();
                 });
             }
@@ -782,7 +802,6 @@
                 let textColor = getVal('baseColor', '#ffffff');
                 let alpha = 1.0;
                 const activeColor = getVal('activeColor', '#facc15');
-                const highlightColor = getVal('highlightColor', '#8b5cf6');
 
                 if (preset === 'pop') {
                     if (dist < 1.5) {
@@ -832,19 +851,15 @@
                 ctx.scale(scale, scale);
                 ctx.rotate(angle);
                 ctx.globalAlpha = alpha;
-
-                // Ensure shadows are off since we removed neon/fade
                 ctx.shadowBlur = 0;
-
                 ctx.fillStyle = textColor;
                 ctx.fillText(w.text, 0, 0);
-
                 ctx.restore();
             });
         }
 
         function loop() {
-            if (!isPlaying && !isRecording) return;
+            if (!isPlaying && !isRecording && !isRecordingVideo) return;
             if (boxPulseScale > 1.0) {
                 boxPulseScale -= 0.01; 
                 if (boxPulseScale < 1.005) boxPulseScale = 1.0;
@@ -859,6 +874,7 @@
                 audio.src = URL.createObjectURL(file);
                 placeholder.style.display = 'none';
                 recordBtn.disabled = false;
+                recordVideoBtn.disabled = false; // NEW
                 isPlaying = false;
                 playBtn.innerHTML = '<i class="fas fa-play ml-1"></i>';
                 seekInput.value = 0;
@@ -868,10 +884,7 @@
 
         playBtn.addEventListener('click', () => {
             if (!audio.src) return;
-            
-            // Инициализация аудио-контекста при первом клике (требование браузеров)
             initAudioContext();
-
             if (audio.paused) {
                 audio.play();
                 isPlaying = true;
@@ -978,9 +991,7 @@
 
         async function startRecording() {
             if (!audio.src) return;
-            
-            initAudioContext(); // Ensure context is ready for recording too
-
+            initAudioContext();
             audio.currentTime = 0; 
             audio.play();
             playBtn.innerHTML = '<i class="fas fa-pause"></i>';
@@ -994,13 +1005,14 @@
                 workerScript: workerUrl,
                 width: canvas.width,
                 height: canvas.height,
-                transparent: 0x000000,
-                background: '#00000000'
+                transparent: isGreenBg ? null : 0x000000,
+                background: isGreenBg ? '#00FF00' : '#00000000'
             });
 
             isRecording = true;
             recordBtn.innerHTML = '<i class="fas fa-square text-red-500 animate-pulse"></i> СТОП';
             recordBtn.classList.add('bg-gray-800', 'border', 'border-red-500');
+            recordVideoBtn.disabled = true;
             
             const captureFPS = parseInt(getVal('fpsInput', 30));
             const delay = 1000 / captureFPS;
@@ -1013,8 +1025,9 @@
         function stopRecording() {
             isRecording = false;
             clearInterval(captureInterval);
-            recordBtn.innerHTML = '<i class="fas fa-video"></i> СОЗДАТЬ GIF';
+            recordBtn.innerHTML = '<i class="fas fa-video"></i> GIF';
             recordBtn.classList.remove('bg-gray-800', 'border', 'border-red-500');
+            recordVideoBtn.disabled = false;
             audio.pause();
             isPlaying = false;
             cancelAnimationFrame(animationId);
@@ -1042,6 +1055,97 @@
             });
 
             gif.render();
+        }
+
+        // --- NEW: MP4 VIDEO RECORDING LOGIC ---
+        let mediaRecorder;
+        let videoChunks = [];
+
+        recordVideoBtn.addEventListener('click', () => {
+            if (isRecordingVideo) stopVideoRecording();
+            else startVideoRecording();
+        });
+
+        async function startVideoRecording() {
+            if (!audio.src) return;
+            initAudioContext();
+            
+            audio.currentTime = 0;
+            audio.play();
+            isPlaying = true;
+            loop();
+
+            const captureFPS = parseInt(getVal('fpsInput', 30));
+            const canvasStream = canvas.captureStream(captureFPS);
+            
+            // Захватываем поток аудио из элемента audio
+            let audioStream;
+            if (audio.captureStream) {
+                audioStream = audio.captureStream();
+            } else if (audio.mozCaptureStream) {
+                audioStream = audio.mozCaptureStream();
+            } else {
+                console.warn("Audio capture not supported in this browser.");
+            }
+
+            // Объединяем видео и аудио треки
+            const tracks = [...canvasStream.getVideoTracks()];
+            if (audioStream) tracks.push(...audioStream.getAudioTracks());
+            
+            const combinedStream = new MediaStream(tracks);
+
+            // Пытаемся выбрать поддерживаемый формат
+            let mimeType = 'video/webm;codecs=vp9,opus';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/mp4';
+
+            mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+            videoChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) videoChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(videoChunks, { type: mediaRecorder.mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                // Сохраняем как mp4 для удобства, хотя технически это может быть webm
+                a.download = 'captions.mp4';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            mediaRecorder.start();
+            isRecordingVideo = true;
+            recordVideoBtn.innerHTML = '<i class="fas fa-square text-red-500 animate-pulse"></i> СТОП';
+            recordVideoBtn.classList.replace('bg-blue-600', 'bg-gray-800');
+            recordVideoBtn.classList.add('border', 'border-red-500');
+            recordBtn.disabled = true;
+            
+            // Автоматическая остановка по окончании аудио
+            audio.onended = () => {
+                if (isRecordingVideo) stopVideoRecording();
+            };
+        }
+
+        function stopVideoRecording() {
+            if (!isRecordingVideo) return;
+            isRecordingVideo = false;
+            mediaRecorder.stop();
+            audio.pause();
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            playBtn.innerHTML = '<i class="fas fa-play ml-1"></i>';
+            
+            recordVideoBtn.innerHTML = '<i class="fas fa-film"></i> MP4';
+            recordVideoBtn.classList.replace('bg-gray-800', 'bg-blue-600');
+            recordVideoBtn.classList.remove('border', 'border-red-500');
+            recordBtn.disabled = false;
+            audio.onended = null;
         }
     </script>
 </body>
