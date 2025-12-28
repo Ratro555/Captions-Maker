@@ -150,9 +150,6 @@
                     <button onclick="setPreset('elastic')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
                         🌀 <b>Elastic</b> <span class="opacity-50 text-[9px] block">Пружинистый эффект</span>
                     </button>
-                    <button onclick="setPreset('neon')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
-                        ✨ <b>Neon</b> <span class="opacity-50 text-[9px] block">Яркое свечение</span>
-                    </button>
                     <button onclick="setPreset('motionBlur')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
                         💨 <b>Blur</b> <span class="opacity-50 text-[9px] block">Размытие в движении</span>
                     </button>
@@ -161,9 +158,6 @@
                     </button>
                     <button onclick="setPreset('karaoke')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
                         🎨 <b>Karaoke</b> <span class="opacity-50 text-[9px] block">Смена цвета</span>
-                    </button>
-                    <button onclick="setPreset('fade')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
-                        👻 <b>Fade</b> <span class="opacity-50 text-[9px] block">Мягкий фокус</span>
                     </button>
                 </div>
             </div>
@@ -496,12 +490,6 @@
                 setVal('strokeWidth', 8);
                 setVal('wordSpacing', 20);
                 setVal('letterSpacing', 0);
-            } else if (presetName === 'neon') { 
-                setVal('activeColor', '#22d3ee'); 
-                setVal('strokeWidth', 4);
-                setVal('strokeColor', '#ffffff');
-                setVal('wordSpacing', 20);
-                setVal('letterSpacing', 2); 
             } else if (presetName === 'motionBlur') { 
                 setVal('activeColor', '#f472b6'); 
                 setVal('strokeWidth', 6);
@@ -518,12 +506,6 @@
                 setVal('activeColor', '#facc15');
                 setVal('strokeWidth', 0);
                 setVal('wordSpacing', 10);
-                setVal('letterSpacing', 0);
-            } else if (presetName === 'fade') {
-                setVal('baseColor', '#ffffff'); 
-                setVal('activeColor', '#ffffff');
-                setVal('highlightColor', '#ffffff'); 
-                setVal('wordSpacing', 15);
                 setVal('letterSpacing', 0);
             }
             if (!isPlaying) draw();
@@ -763,17 +745,11 @@
                         const dir = (w.index % 2 === 0) ? 1 : -1;
                         angle = dir * Math.sin(dist * 3.0) * decay * rotStrength;
                     }
-                    else if (preset === 'neon' && dist < 1.2 && dist < 0.6) {
-                        scale = 1.1; 
-                    }
                     else if (preset === 'motionBlur' && dist < 0.8 && dist > 0.0) {
                         scale = 1.0 + (0.1 * dist);
                     }
                     else if (preset === 'karaoke' && w.index === activeWordIndex) {
                         scale = 1.0 + (boxPulseScale - 1.0) * 0.5;
-                    }
-                    else if (preset === 'fade' && dist < 0.8) {
-                        scale = 1.1 - (dist * 0.1);
                     }
 
                     if (Math.abs(scale - 1.0) < 0.005) scale = 1.0;
@@ -825,22 +801,6 @@
                         angle = dir * Math.sin(dist * 3.0) * decay * rotStrength;
                     }
                 }
-                else if (preset === 'neon') {
-                      if (dist < 1.2) {
-                        if (dist < 0.6) {
-                            textColor = activeColor;
-                            const pulse = 20 + (10 * Math.sin(Date.now() / 100));
-                            ctx.shadowBlur = pulse;
-                            ctx.shadowColor = activeColor;
-                            scale = 1.1; 
-                        } else {
-                            ctx.shadowBlur = 10 * (1.2 - dist);
-                            ctx.shadowColor = activeColor;
-                        }
-                    } else {
-                        ctx.shadowBlur = 0;
-                    }
-                }
                 else if (preset === 'motionBlur') {
                       if (dist < 0.8) textColor = activeColor;
                       if (dist < 0.8 && dist > 0.0) {
@@ -864,19 +824,6 @@
                     else textColor = getVal('baseColor', '#555555');
                     if (isActive) scale = 1.0 + (boxPulseScale - 1.0) * 0.5;
                 }
-                else if (preset === 'fade') {
-                    if (dist < 2.0) {
-                        alpha = 1.0;
-                        if (dist < 0.8) {
-                            textColor = activeColor;
-                            scale = 1.1 - (dist * 0.1);
-                            ctx.shadowBlur = 15 * (1-dist);
-                            ctx.shadowColor = highlightColor;
-                        }
-                    } else {
-                        alpha = 0.3;
-                    }
-                }
 
                 if (Math.abs(scale - 1.0) < 0.005) scale = 1.0;
 
@@ -886,9 +833,8 @@
                 ctx.rotate(angle);
                 ctx.globalAlpha = alpha;
 
-                if(preset !== 'neon' && preset !== 'fade') {
-                    ctx.shadowBlur = 0;
-                }
+                // Ensure shadows are off since we removed neon/fade
+                ctx.shadowBlur = 0;
 
                 ctx.fillStyle = textColor;
                 ctx.fillText(w.text, 0, 0);
