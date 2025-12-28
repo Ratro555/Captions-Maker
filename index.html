@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Captions GIF Maker</title>
+    <title>Captions GIF Maker (Audio Reactive)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -157,7 +157,7 @@
                         💨 <b>Blur</b> <span class="opacity-50 text-[9px] block">Размытие в движении</span>
                     </button>
                     <button onclick="setPreset('box')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
-                        🟦 <b>Box</b> <span class="opacity-50 text-[9px] block">Скользящая плашка</span>
+                        🟦 <b>Box</b> <span class="opacity-50 text-[9px] block">Аудио-плашка</span>
                     </button>
                     <button onclick="setPreset('karaoke')" class="preset-btn bg-gray-800 hover:bg-gray-700 text-left px-3 py-2 rounded text-xs border border-gray-700">
                         🎨 <b>Karaoke</b> <span class="opacity-50 text-[9px] block">Смена цвета</span>
@@ -291,6 +291,41 @@
         const placeholder = document.getElementById('placeholder');
         const fpsInput = document.getElementById('fpsInput');
         const fpsDisplay = document.getElementById('fpsDisplay');
+
+        // --- WEB AUDIO API SETUP ---
+        let audioCtx;
+        let analyser;
+        let source;
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256; // Размер буфера для анализа
+                source = audioCtx.createMediaElementSource(audio);
+                source.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function getAudioAmplitude() {
+            if (!analyser) return 0;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Считаем среднюю громкость
+            let sum = 0;
+            for(let i = 0; i < bufferLength; i++) {
+                sum += dataArray[i];
+            }
+            // Нормализуем от 0 до 1
+            return sum / bufferLength / 255;
+        }
+        // ---------------------------
 
         function getVal(id, defaultVal) {
             const el = document.getElementById(id);
@@ -639,11 +674,16 @@
                 const safeIndex = Math.min(Math.max(activeWordIndex, 0), layout.length - 1);
                 const targetW = layout[safeIndex];
                 if (targetW) {
-                    const padX = parseInt(getVal('boxPadX', 20));
-                    const padY = parseInt(getVal('boxPadY', 10));
                     const offY = parseInt(getVal('boxOffsetY', 0));
-                    const boxTargetW = targetW.width + (padX * 2);
-                    const boxTargetH = fontSize + (padY * 2); 
+                    
+                    // Базовые параметры из слайдеров (Максимальные отступы)
+                    const userMaxPadX = parseInt(getVal('boxPadX', 20));
+                    const userMaxPadY = parseInt(getVal('boxPadY', 10));
+
+                    // Цель сглаживания теперь - это ТОЛЬКО размеры текста
+                    // Мы не включаем отступы в smoothBox, мы добавляем их при отрисовке
+                    const boxTargetW = targetW.width;
+                    const boxTargetH = fontSize; 
                     const boxTargetX = targetW.x; 
                     const boxTargetY = targetW.y + offY;
 
@@ -661,16 +701,31 @@
                         smoothBox.h += (boxTargetH - smoothBox.h) * speed;
                     }
 
+                    // --- AUDIO REACTIVE PADDING ---
+                    // Амплитуда влияет только на заполнение отступов (padding)
+                    // MinPad - чтобы текст не прилипал к краям даже в тишине
+                    const minPad = 4; 
+                    let amp = 0;
+                    if (isPlaying && analyser) {
+                         // Усиливаем амплитуду, чтобы эффект был виден (0.0 - 1.0)
+                         amp = Math.min(1.0, getAudioAmplitude() * 2.5); 
+                    }
+                    
+                    // Плавная интерполяция от minPad до UserMaxPad
+                    const currentPadX = minPad + (userMaxPadX - minPad) * amp;
+                    const currentPadY = minPad + (userMaxPadY - minPad) * amp;
+
                     ctx.save();
                     ctx.translate(Math.round(smoothBox.x), Math.round(smoothBox.y));
-                    let finalScale = boxPulseScale;
-                    if (Math.abs(finalScale - 1.0) < 0.005) finalScale = 1.0;
-                    ctx.scale(finalScale, finalScale);
+                    
+                    // Отрисовка с учетом динамических отступов
                     ctx.fillStyle = getVal('highlightColor', '#8b5cf6');
                     ctx.beginPath();
-                    const bw = Math.round(smoothBox.w);
-                    const bh = Math.round(smoothBox.h);
-                    ctx.roundRect(-bw/2, -bh/2, bw, bh, 12);
+                    
+                    const drawW = smoothBox.w + (currentPadX * 2);
+                    const drawH = smoothBox.h + (currentPadY * 2);
+                    
+                    ctx.roundRect(-drawW/2, -drawH/2, drawW, drawH, 12);
                     ctx.fill();
                     ctx.restore();
                 }
@@ -771,7 +826,7 @@
                     }
                 }
                 else if (preset === 'neon') {
-                     if (dist < 1.2) {
+                      if (dist < 1.2) {
                         if (dist < 0.6) {
                             textColor = activeColor;
                             const pulse = 20 + (10 * Math.sin(Date.now() / 100));
@@ -787,19 +842,19 @@
                     }
                 }
                 else if (preset === 'motionBlur') {
-                     if (dist < 0.8) textColor = activeColor;
-                     if (dist < 0.8 && dist > 0.0) {
-                         const ghostAlpha = 0.2;
-                         ctx.save();
-                         ctx.translate(Math.round(w.x), Math.round(w.y));
-                         ctx.scale(1.0 + (0.1 * dist), 1.0 + (0.1 * dist));
-                         ctx.globalAlpha = ghostAlpha;
-                         ctx.fillStyle = textColor;
-                         ctx.translate(-8 * dist * 3, 0); 
-                         ctx.fillText(w.text, 0, 0);
-                         ctx.restore();
-                         scale = 1.0 + (0.1 * dist);
-                     }
+                      if (dist < 0.8) textColor = activeColor;
+                      if (dist < 0.8 && dist > 0.0) {
+                          const ghostAlpha = 0.2;
+                          ctx.save();
+                          ctx.translate(Math.round(w.x), Math.round(w.y));
+                          ctx.scale(1.0 + (0.1 * dist), 1.0 + (0.1 * dist));
+                          ctx.globalAlpha = ghostAlpha;
+                          ctx.fillStyle = textColor;
+                          ctx.translate(-8 * dist * 3, 0); 
+                          ctx.fillText(w.text, 0, 0);
+                          ctx.restore();
+                          scale = 1.0 + (0.1 * dist);
+                      }
                 }
                 else if (preset === 'box') {
                     if (isActive) textColor = activeColor;
@@ -867,6 +922,10 @@
 
         playBtn.addEventListener('click', () => {
             if (!audio.src) return;
+            
+            // Инициализация аудио-контекста при первом клике (требование браузеров)
+            initAudioContext();
+
             if (audio.paused) {
                 audio.play();
                 isPlaying = true;
@@ -973,6 +1032,9 @@
 
         async function startRecording() {
             if (!audio.src) return;
+            
+            initAudioContext(); // Ensure context is ready for recording too
+
             audio.currentTime = 0; 
             audio.play();
             playBtn.innerHTML = '<i class="fas fa-pause"></i>';
